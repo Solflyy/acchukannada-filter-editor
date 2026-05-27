@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix Live Editor</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #121212; color: #eee; padding: 20px; margin: 0; }
+        .container { display: flex; gap: 30px; max-width: 1400px; margin: 0 auto; align-items: flex-start; }
+        
+        /* Left: Image & Watermark */
+        .image-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        
+        /* Wrapper for relative positioning */
+        .image-wrapper { position: relative; width: 100%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: #000; overflow: hidden; display: flex; justify-content: center; }
+        
+        #previewImage { width: 100%; max-height: 80vh; object-fit: contain; }
+        
+        /* The Overlay Text */
+        .watermark-text {
+            position: absolute;
+            bottom: 25px;
+            right: 25px;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            /* Text shadow ensures readability on light images */
+            text-shadow: 2px 2px 6px rgba(0,0,0,0.8);
+            pointer-events: none; /* Allows clicks to pass through if needed */
+            z-index: 10;
+        }
+
+        .file-input-wrapper { text-align: center; }
+
+        /* Right: Controls */
+        .controls-panel { flex: 1; background: #1e1e1e; padding: 20px; border-radius: 8px; border: 1px solid #333; }
+        
+        textarea { width: 100%; height: 100px; background: #121212; color: #00ffcc; border: 1px solid #444; padding: 10px; font-family: monospace; border-radius: 4px; resize: vertical; box-sizing: border-box; }
+        
+        .grid-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0; }
+        .grid-container input { width: 100%; padding: 8px; background: #2a2a2a; border: 1px solid #444; color: #fff; font-family: monospace; text-align: center; border-radius: 4px; box-sizing: border-box; }
+        .grid-container input:focus { border-color: #3b82f6; outline: none; background: #333; }
+        
+        /* Labels for matrix columns */
+        .col-label { text-align: center; font-size: 12px; color: #888; font-weight: bold; margin-bottom: -5px; }
+
+        button { background: #3b82f6; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; transition: 0.2s; }
+        button:hover { background: #2563eb; }
+        .btn-success { background: #10b981; }
+        .btn-success:hover { background: #059669; }
+        .btn-outline { background: transparent; border: 1px solid #3b82f6; color: #3b82f6; }
+        .btn-outline:hover { background: #3b82f6; color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="image-panel">
+            <div class="image-wrapper">
+                <img id="previewImage" src="https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=1000&auto=format&fit=crop" alt="Preview">
+                <div class="watermark-text">Acchu Kannada Filter</div>
+            </div>
+            
+            <div class="file-input-wrapper">
+                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                <button class="btn-outline" onclick="document.getElementById('imageUpload').click()">Upload Custom Photo</button>
+            </div>
+        </div>
+
+        <div class="controls-panel">
+            <h3>1. Paste Matrix</h3>
+            <p style="font-size: 13px; color: #aaa;">Paste the `[ ... ]` array or the full JSON block. The app will extract the numbers.</p>
+            <textarea id="pasteArea" placeholder="[ 1.25, 0.15, 0.00... ]"></textarea>
+            <button onclick="parsePastedData()">Load into Editor</button>
+
+            <hr style="border-color: #333; margin: 25px 0;">
+
+            <h3>2. Tweak Values</h3>
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
+                <div class="col-label">R</div>
+                <div class="col-label">G</div>
+                <div class="col-label">B</div>
+                <div class="col-label">A</div>
+                <div class="col-label">Offset</div>
+            </div>
+            <div class="grid-container" id="matrixGrid">
+                </div>
+
+            <hr style="border-color: #333; margin: 25px 0;">
+
+            <h3>3. Export</h3>
+            <button id="copyBtn" class="btn-success" onclick="copyEditedMatrix()">Copy Edited Matrix</button>
+        </div>
+    </div>
+
+    <svg width="0" height="0" style="position: absolute;">
+        <filter id="custom-matrix-filter">
+            <feColorMatrix type="matrix" id="matrix-values" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
+        </filter>
+    </svg>
+
+    <script>
+        const gridContainer = document.getElementById('matrixGrid');
+        const previewImage = document.getElementById('previewImage');
+        const matrixElement = document.getElementById('matrix-values');
+        const inputs = [];
+
+        // Initialize 20 input boxes (4 rows x 5 columns)
+        for (let i = 0; i < 20; i++) {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.step = (i % 5 === 4) ? '0.01' : '0.05'; // Finer step for offsets
+            input.value = (i % 6 === 0 && i !== 19) ? '1' : '0'; // Default identity matrix
+            
+            // Update filter immediately when value changes or arrow keys are used
+            input.addEventListener('input', applyCurrentGrid);
+            
+            gridContainer.appendChild(input);
+            inputs.push(input);
+        }
+
+        // Apply identity matrix on load
+        applyCurrentGrid();
+
+        // Handle Image Upload
+        document.getElementById('imageUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => previewImage.src = event.target.result;
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 1. Smart Parse Pasted Data
+        function parsePastedData() {
+            const text = document.getElementById('pasteArea').value;
+            // Regex to find any floating point or negative numbers in the text
+            const matches = text.match(/-?\d+\.?\d*/g);
+            
+            if (matches && matches.length >= 20) {
+                // Take the first 20 numbers found
+                for (let i = 0; i < 20; i++) {
+                    inputs[i].value = parseFloat(matches[i]);
+                }
+                applyCurrentGrid();
+            } else {
+                alert("Could not detect 20 numbers in the pasted text.");
+            }
+        }
+
+        // 2. Read Grid and Apply SVG Filter
+        function applyCurrentGrid() {
+            const values = inputs.map(input => input.value || 0).join(' ');
+            matrixElement.setAttribute('values', values);
+            // Notice: The filter is applied ONLY to the image, not the watermark text
+            previewImage.style.filter = 'url(#custom-matrix-filter)';
+        }
+
+        // 3. Format and Copy Back to Clipboard
+        function copyEditedMatrix() {
+            let output = '[\n  ';
+            for (let i = 0; i < 20; i++) {
+                // Ensure numbers have 2 decimal places for clean formatting
+                let val = parseFloat(inputs[i].value || 0).toFixed(2);
+                output += val;
+                
+                if (i < 19) output += ', ';
+                if ((i + 1) % 5 === 0 && i !== 19) output += '\n  ';
+            }
+            output += '\n]';
+
+            navigator.clipboard.writeText(output).then(() => {
+                const btn = document.getElementById('copyBtn');
+                const originalText = btn.innerText;
+                btn.innerText = 'Copied to Clipboard! ✓';
+                setTimeout(() => btn.innerText = originalText, 2000);
+            });
+        }
+    </script>
+</body>
+</html>

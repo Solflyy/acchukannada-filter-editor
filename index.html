@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Prevents annoying auto-zoom on mobile devices when tapping inputs -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Acchu Mobile Live Editor</title>
     <style>
@@ -10,7 +9,7 @@
         .container { display: flex; flex-direction: row; gap: 30px; max-width: 1400px; margin: 0 auto; align-items: flex-start; }
         
         /* Left: Image & Watermark */
-        .image-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; width: 100%; }
+        .image-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; width: 100%; position: sticky; top: 20px; }
         .image-wrapper { position: relative; width: 100%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: #000; overflow: hidden; display: flex; justify-content: center; }
         #previewImage { width: 100%; max-height: 80vh; object-fit: contain; }
         
@@ -27,13 +26,16 @@
         
         textarea { width: 100%; height: 80px; background: #121212; color: #00ffcc; border: 1px solid #444; padding: 10px; font-family: monospace; border-radius: 4px; resize: vertical; box-sizing: border-box; font-size: 14px; }
         
-        .grid-container { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 15px 0; }
+        /* Slider Layout UI */
+        .channel-group { background: #222; border: 1px solid #333; border-radius: 6px; padding: 12px; margin-bottom: 15px; }
+        .channel-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #f59e0b; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #333; padding-bottom: 5px; }
         
-        /* Inputs set to 16px to prevent iOS Safari auto-zoom */
-        .grid-container input { width: 100%; padding: 10px 4px; background: #2a2a2a; border: 1px solid #444; color: #fff; font-family: monospace; text-align: center; border-radius: 4px; box-sizing: border-box; font-size: 16px; }
-        .grid-container input:focus { border-color: #f59e0b; outline: none; background: #333; }
+        .slider-row { display: grid; grid-template-columns: 30px 1fr 60px; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .slider-label { font-size: 12px; font-weight: bold; color: #aaa; text-align: right; }
         
-        .col-label { text-align: center; font-size: 12px; color: #888; font-weight: bold; margin-bottom: -5px; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #3b82f6; }
+        input[type=number] { width: 100%; padding: 6px 4px; background: #2a2a2a; border: 1px solid #444; color: #fff; font-family: monospace; text-align: center; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+        input[type=number]:focus { border-color: #f59e0b; outline: none; background: #333; }
 
         /* Auto-Naming Box */
         .suggestion-box { background: #2a2a2a; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 4px; margin: 20px 0; }
@@ -48,10 +50,10 @@
         @media (max-width: 768px) {
             body { padding: 10px; }
             .container { flex-direction: column; gap: 15px; }
+            .image-panel { position: static; } /* Removes sticky on mobile so you can scroll to sliders */
             .watermark-text { font-size: 18px; bottom: 15px; right: 15px; }
-            .grid-container { gap: 4px; }
-            .grid-container input { padding: 8px 2px; font-size: 14px; }
             .controls-panel { padding: 15px; }
+            .slider-row { grid-template-columns: 25px 1fr 55px; gap: 8px; }
         }
     </style>
 </head>
@@ -72,19 +74,16 @@
 
         <!-- Right: Editor -->
         <div class="controls-panel">
-            <h3 style="margin-top: 0;">1. Paste Matrix</h3>
+            <h3 style="margin-top: 0; font-size: 16px;">1. Paste Matrix</h3>
             <textarea id="pasteArea" placeholder="[ 1.25, 0.15, 0.00... ]"></textarea>
             <button onclick="parsePastedData()">Load into Editor</button>
 
             <hr style="border-color: #333; margin: 25px 0;">
 
-            <h3>2. Tweak Values</h3>
-            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
-                <div class="col-label">R</div><div class="col-label">G</div>
-                <div class="col-label">B</div><div class="col-label">A</div>
-                <div class="col-label">Off</div>
+            <h3 style="font-size: 16px;">2. Tweak Values</h3>
+            <div id="slidersContainer">
+                <!-- Sliders generated via JS to keep HTML clean -->
             </div>
-            <div class="grid-container" id="matrixGrid"></div>
 
             <!-- Auto Name Suggestion -->
             <div class="suggestion-box">
@@ -105,21 +104,61 @@
     </svg>
 
     <script>
-        const gridContainer = document.getElementById('matrixGrid');
         const previewImage = document.getElementById('previewImage');
         const matrixElement = document.getElementById('matrix-values');
-        const inputs = [];
+        const slidersContainer = document.getElementById('slidersContainer');
+        
+        const rowLabels = ['Red Channel', 'Green Channel', 'Blue Channel', 'Alpha (Transparency)'];
+        const colLabels = ['R', 'G', 'B', 'A', 'Off'];
+        
+        let inputs = []; // Stores the number inputs for reading values
 
-        // Build grid
-        for (let i = 0; i < 20; i++) {
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.step = (i % 5 === 4) ? '0.01' : '0.05';
-            input.value = (i % 6 === 0 && i !== 19) ? '1' : '0'; 
-            input.addEventListener('input', updateApp);
-            gridContainer.appendChild(input);
-            inputs.push(input);
+        // Generate the Slider UI dynamically
+        function buildSliders() {
+            let html = '';
+            for (let r = 0; r < 4; r++) {
+                html += `<div class="channel-group"><div class="channel-title">${rowLabels[r]}</div>`;
+                for (let c = 0; c < 5; c++) {
+                    let index = (r * 5) + c;
+                    let isOffset = c === 4;
+                    
+                    // Offsets have smaller ranges (-1 to 1), colors have larger ranges (-2 to 3)
+                    let min = isOffset ? -1 : -2;
+                    let max = isOffset ? 1 : 3;
+                    let step = isOffset ? 0.01 : 0.05;
+                    let defValue = (r === c) ? 1 : 0; // Creates default identity matrix
+
+                    html += `
+                        <div class="slider-row">
+                            <div class="slider-label">${colLabels[c]}</div>
+                            <input type="range" class="matrix-slider" data-idx="${index}" min="${min}" max="${max}" step="${step}" value="${defValue}">
+                            <input type="number" class="matrix-num" data-idx="${index}" step="${step}" value="${defValue}">
+                        </div>
+                    `;
+                }
+                html += `</div>`;
+            }
+            slidersContainer.innerHTML = html;
+
+            const sliderEls = document.querySelectorAll('.matrix-slider');
+            const numEls = document.querySelectorAll('.matrix-num');
+            inputs = Array.from(numEls);
+
+            // Sync Sliders and Number Boxes
+            function syncInputs(e) {
+                let idx = e.target.dataset.idx;
+                let val = e.target.value;
+                sliderEls[idx].value = val;
+                numEls[idx].value = val;
+                updateApp();
+            }
+
+            sliderEls.forEach(s => s.addEventListener('input', syncInputs));
+            numEls.forEach(n => n.addEventListener('input', syncInputs));
         }
+
+        // Initialize UI
+        buildSliders();
 
         // Handle Image Upload
         document.getElementById('imageUpload').addEventListener('change', e => {
@@ -134,7 +173,11 @@
             const text = document.getElementById('pasteArea').value;
             const matches = text.match(/-?\d+\.?\d*/g);
             if (matches && matches.length >= 20) {
-                for (let i = 0; i < 20; i++) inputs[i].value = parseFloat(matches[i]);
+                const sliderEls = document.querySelectorAll('.matrix-slider');
+                for (let i = 0; i < 20; i++) {
+                    inputs[i].value = parseFloat(matches[i]);
+                    sliderEls[i].value = parseFloat(matches[i]); // Sync slider position
+                }
                 updateApp();
             } else {
                 alert("Could not detect 20 numbers in the text.");
@@ -154,16 +197,12 @@
 
         // Logic to determine color tint and suggest names
         function generateName() {
-            // Get main diagonal weights and offsets
             const redR = parseFloat(inputs[0].value) || 0;
             const redOff = parseFloat(inputs[4].value) || 0;
-            
             const greenG = parseFloat(inputs[6].value) || 0;
-            
             const blueB = parseFloat(inputs[12].value) || 0;
             const blueOff = parseFloat(inputs[14].value) || 0;
 
-            // Simple tint calculation
             const redBias = redR + redOff;
             const blueBias = blueB + blueOff;
             
@@ -171,23 +210,17 @@
             let kn = "ಕ್ಲಾಸಿಕ್ (Classic)";
 
             if (redR < 0.6 && greenG < 0.6 && blueB < 0.6) {
-                en = "Vintage Fade";
-                kn = "ಮರೆಯಾದ ನೆನಪು (Faded Memory)";
+                en = "Vintage Fade"; kn = "ಮರೆಯಾದ ನೆನಪು (Faded Memory)";
             } else if (redBias > blueBias + 0.3 && redBias > greenG) {
-                en = "Warm Sunlit / Golden";
-                kn = "ಸೂರ್ಯನ ಮಂಜು (Sunlit Haze)";
+                en = "Warm Sunlit / Golden"; kn = "ಸೂರ್ಯನ ಮಂಜು (Sunlit Haze)";
             } else if (blueBias > redBias + 0.3 && blueBias > greenG) {
-                en = "Cinematic Teal / Cool";
-                kn = "ತಂಪು ನೀಲಿ (Cool Blue)";
+                en = "Cinematic Teal / Cool"; kn = "ತಂಪು ನೀಲಿ (Cool Blue)";
             } else if (greenG > redBias && greenG > blueBias) {
-                en = "Earthy / Nature";
-                kn = "ಹಸಿರು ವನ (Green Forest)";
+                en = "Earthy / Nature"; kn = "ಹಸಿರು ವನ (Green Forest)";
             } else if (redR > 1.2 || greenG > 1.2 || blueB > 1.2) {
-                en = "Vivid Punch";
-                kn = "ಗಾಢ ಬಣ್ಣ (Vivid Colors)";
+                en = "Vivid Punch"; kn = "ಗಾಢ ಬಣ್ಣ (Vivid Colors)";
             } else {
-                en = "Soft / Natural";
-                kn = "ಮೃದು (Soft)";
+                en = "Soft / Natural"; kn = "ಮೃದು (Soft)";
             }
 
             document.getElementById('suggestEn').innerText = en;
@@ -211,7 +244,7 @@
             });
         }
 
-        // Initialize on load
+        // Apply on first load
         updateApp();
     </script>
 </body>

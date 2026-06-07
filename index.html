@@ -8,7 +8,6 @@
         body { font-family: system-ui, sans-serif; background: #121212; color: #eee; padding: 20px; margin: 0; }
         .container { display: flex; flex-direction: row; gap: 30px; max-width: 1400px; margin: 0 auto; align-items: flex-start; }
         
-        /* Left: Image & Watermark */
         .image-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; width: 100%; position: sticky; top: 20px; }
         .image-wrapper { position: relative; width: 100%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: #000; overflow: hidden; display: flex; justify-content: center; }
         #previewImage { width: 100%; max-height: 80vh; object-fit: contain; }
@@ -21,13 +20,12 @@
 
         .file-input-wrapper { text-align: center; }
 
-        /* Right: Controls */
         .controls-panel { flex: 1; background: #1e1e1e; padding: 20px; border-radius: 8px; border: 1px solid #333; width: 100%; box-sizing: border-box; }
         
-        textarea { width: 100%; height: 80px; background: #121212; color: #00ffcc; border: 1px solid #444; padding: 10px; font-family: monospace; border-radius: 4px; resize: vertical; box-sizing: border-box; font-size: 14px; }
+        textarea { width: 100%; height: 60px; background: #121212; color: #00ffcc; border: 1px solid #444; padding: 10px; font-family: monospace; border-radius: 4px; resize: vertical; box-sizing: border-box; font-size: 14px; margin-bottom: 10px;}
         
-        /* Slider Layout UI */
         .channel-group { background: #222; border: 1px solid #333; border-radius: 6px; padding: 12px; margin-bottom: 15px; }
+        .grain-group { background: #2a2a2a; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin-bottom: 20px; }
         .channel-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #f59e0b; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #333; padding-bottom: 5px; }
         
         .slider-row { display: grid; grid-template-columns: 30px 1fr 60px; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -37,20 +35,20 @@
         input[type=number] { width: 100%; padding: 6px 4px; background: #2a2a2a; border: 1px solid #444; color: #fff; font-family: monospace; text-align: center; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
         input[type=number]:focus { border-color: #f59e0b; outline: none; background: #333; }
 
-        /* Auto-Naming Box */
         .suggestion-box { background: #2a2a2a; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 4px; margin: 20px 0; }
         .suggestion-label { font-size: 12px; color: #aaa; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
 
-        button { background: #3b82f6; color: white; border: none; padding: 12px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; font-size: 16px; }
+        button { background: #3b82f6; color: white; border: none; padding: 12px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 5px; font-size: 14px; }
         button:hover { background: #2563eb; }
         .btn-success { background: #10b981; }
+        .btn-warning { background: #f59e0b; color: #000; }
+        .btn-warning:hover { background: #d97706; }
         .btn-outline { background: transparent; border: 1px solid #3b82f6; color: #3b82f6; margin-top: 0; }
 
-        /* MOBILE RESPONSIVE RULES */
         @media (max-width: 768px) {
             body { padding: 10px; }
             .container { flex-direction: column; gap: 15px; }
-            .image-panel { position: static; } /* Removes sticky on mobile so you can scroll to sliders */
+            .image-panel { position: static; }
             .watermark-text { font-size: 18px; bottom: 15px; right: 15px; }
             .controls-panel { padding: 15px; }
             .slider-row { grid-template-columns: 25px 1fr 55px; gap: 8px; }
@@ -60,7 +58,6 @@
 <body>
 
     <div class="container">
-        <!-- Left: Image -->
         <div class="image-panel">
             <div class="image-wrapper">
                 <img id="previewImage" src="https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=1000&auto=format&fit=crop" alt="Preview">
@@ -72,48 +69,75 @@
             </div>
         </div>
 
-        <!-- Right: Editor -->
         <div class="controls-panel">
-            <h3 style="margin-top: 0; font-size: 16px;">1. Paste Matrix</h3>
-            <textarea id="pasteArea" placeholder="[ 1.25, 0.15, 0.00... ]"></textarea>
-            <button onclick="parsePastedData()">Load into Editor</button>
+            <h3 style="margin-top: 0; font-size: 16px;">1. Import Matrix Data</h3>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <div style="flex: 1;">
+                    <button class="btn-warning" onclick="document.getElementById('lutUpload').click()">Upload .cube LUT</button>
+                    <input type="file" id="lutUpload" accept=".cube" style="display: none;">
+                </div>
+            </div>
+            
+            <textarea id="pasteArea" placeholder="Or paste JSON array here [ 1.25, 0.15, 0.00... ]"></textarea>
+            <button onclick="parsePastedData()">Load from Text</button>
 
             <hr style="border-color: #333; margin: 25px 0;">
 
             <h3 style="font-size: 16px;">2. Tweak Values</h3>
-            <div id="slidersContainer">
-                <!-- Sliders generated via JS to keep HTML clean -->
+            
+            <div class="grain-group">
+                <div class="channel-title" style="color: #fff; border-color: #555;">Film Grain (Noise)</div>
+                <div class="slider-row" style="grid-template-columns: 1fr 60px;">
+                    <input type="range" id="grainSlider" min="0" max="0.5" step="0.01" value="0">
+                    <input type="number" id="grainNum" min="0" max="0.5" step="0.01" value="0">
+                </div>
             </div>
 
-            <!-- Auto Name Suggestion -->
+            <div id="slidersContainer"></div>
+
             <div class="suggestion-box">
                 <div class="suggestion-label">Suggested Filter Name</div>
                 <strong id="suggestEn" style="font-size: 16px;">Analyzing...</strong><br>
                 <strong id="suggestKn" style="font-size: 20px; color: #f59e0b; font-weight: 800; margin-top: 4px; display: inline-block;">...</strong>
             </div>
 
-            <button id="copyBtn" class="btn-success" onclick="copyEditedMatrix()">Copy Final Matrix</button>
+            <button id="copyBtn" class="btn-success" onclick="copyEditedMatrix()">Copy Final Matrix JSON</button>
         </div>
     </div>
 
-    <!-- Hidden SVG Engine -->
     <svg width="0" height="0" style="position: absolute;">
         <filter id="custom-matrix-filter">
-            <feColorMatrix type="matrix" id="matrix-values" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
+            <feColorMatrix in="SourceGraphic" type="matrix" id="matrix-values" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0" result="colorized"/>
+            <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="2" result="noise"/>
+            <feColorMatrix type="matrix" id="grain-opacity" values="1 0 0 0 0  1 0 0 0 0  1 0 0 0 0  0 0 0 0 0" in="noise" result="coloredNoise"/>
+            <feBlend mode="overlay" in="colorized" in2="coloredNoise"/>
         </filter>
     </svg>
 
     <script>
         const previewImage = document.getElementById('previewImage');
         const matrixElement = document.getElementById('matrix-values');
+        const grainOpacityElement = document.getElementById('grain-opacity');
         const slidersContainer = document.getElementById('slidersContainer');
         
         const rowLabels = ['Red Channel', 'Green Channel', 'Blue Channel', 'Alpha (Transparency)'];
         const colLabels = ['R', 'G', 'B', 'A', 'Off'];
-        
-        let inputs = []; // Stores the number inputs for reading values
+        let inputs = [];
 
-        // Generate the Slider UI dynamically
+        // Grain Sync
+        const grainSlider = document.getElementById('grainSlider');
+        const grainNum = document.getElementById('grainNum');
+        function updateGrain() {
+            let val = grainSlider.value;
+            grainNum.value = val;
+            grainOpacityElement.setAttribute('values', `1 0 0 0 0  1 0 0 0 0  1 0 0 0 0  0 0 0 ${val} 0`);
+            previewImage.style.filter = 'url(#custom-matrix-filter)';
+        }
+        grainSlider.addEventListener('input', (e) => { grainNum.value = e.target.value; updateGrain(); });
+        grainNum.addEventListener('input', (e) => { grainSlider.value = e.target.value; updateGrain(); });
+
+        // Sliders
         function buildSliders() {
             let html = '';
             for (let r = 0; r < 4; r++) {
@@ -121,13 +145,10 @@
                 for (let c = 0; c < 5; c++) {
                     let index = (r * 5) + c;
                     let isOffset = c === 4;
-                    
-                    // Offsets have smaller ranges (-1 to 1), colors have larger ranges (-2 to 3)
                     let min = isOffset ? -1 : -2;
                     let max = isOffset ? 1 : 3;
                     let step = isOffset ? 0.01 : 0.05;
-                    let defValue = (r === c) ? 1 : 0; // Creates default identity matrix
-
+                    let defValue = (r === c) ? 1 : 0; 
                     html += `
                         <div class="slider-row">
                             <div class="slider-label">${colLabels[c]}</div>
@@ -139,28 +160,22 @@
                 html += `</div>`;
             }
             slidersContainer.innerHTML = html;
-
             const sliderEls = document.querySelectorAll('.matrix-slider');
             const numEls = document.querySelectorAll('.matrix-num');
             inputs = Array.from(numEls);
 
-            // Sync Sliders and Number Boxes
             function syncInputs(e) {
                 let idx = e.target.dataset.idx;
-                let val = e.target.value;
-                sliderEls[idx].value = val;
-                numEls[idx].value = val;
+                sliderEls[idx].value = e.target.value;
+                numEls[idx].value = e.target.value;
                 updateApp();
             }
-
             sliderEls.forEach(s => s.addEventListener('input', syncInputs));
             numEls.forEach(n => n.addEventListener('input', syncInputs));
         }
-
-        // Initialize UI
         buildSliders();
 
-        // Handle Image Upload
+        // Image Upload
         document.getElementById('imageUpload').addEventListener('change', e => {
             if (e.target.files[0]) {
                 const reader = new FileReader();
@@ -169,6 +184,92 @@
             }
         });
 
+        // --------------------------------------------------------
+        // NEW: LUT PARSING ALGORITHM
+        // --------------------------------------------------------
+        document.getElementById('lutUpload').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const text = event.target.result;
+                extractMatrixFromLUT(text);
+            };
+            reader.readAsText(file);
+        });
+
+        function extractMatrixFromLUT(lutText) {
+            const lines = lutText.split('\n');
+            let size = 0;
+            const data = [];
+
+            // Parse .cube file
+            for (let line of lines) {
+                line = line.trim();
+                if (line.startsWith('LUT_3D_SIZE')) {
+                    size = parseInt(line.split(' ')[1]);
+                } else if (line.length > 0 && !line.startsWith('#') && !line.match(/[A-Z]/)) {
+                    const rgb = line.split(' ').filter(Boolean).map(Number);
+                    if (rgb.length === 3) data.push(rgb);
+                }
+            }
+
+            if (size === 0 || data.length !== size * size * size) {
+                alert("Invalid or unsupported .cube LUT file.");
+                return;
+            }
+
+            // Math: Extract Linear Matrix Vectors from the 3D Cube
+            // We sample the 4 corners: Black, Red, Green, Blue
+            
+            // Index helper for 3D LUT (R changes fastest, then G, then B)
+            const getIndex = (r, g, b) => r + g * size + b * size * size;
+
+            // 1. Black (0,0,0) gives us the Offset column
+            const black = data[getIndex(0, 0, 0)];
+            const rOff = black[0];
+            const gOff = black[1];
+            const bOff = black[2];
+
+            // 2. Pure Red (1,0,0) minus Black gives Red column
+            const pureRed = data[getIndex(size - 1, 0, 0)];
+            const rR = pureRed[0] - rOff;
+            const gR = pureRed[1] - gOff;
+            const bR = pureRed[2] - bOff;
+
+            // 3. Pure Green (0,1,0) minus Black gives Green column
+            const pureGreen = data[getIndex(0, size - 1, 0)];
+            const rG = pureGreen[0] - rOff;
+            const gG = pureGreen[1] - gOff;
+            const bG = pureGreen[2] - bOff;
+
+            // 4. Pure Blue (0,0,1) minus Black gives Blue column
+            const pureBlue = data[getIndex(0, 0, size - 1)];
+            const rB = pureBlue[0] - rOff;
+            const gB = pureBlue[1] - gOff;
+            const bB = pureBlue[2] - bOff;
+
+            // Construct the 20-value matrix array
+            const newMatrix = [
+                rR, rG, rB, 0, rOff,
+                gR, gG, gB, 0, gOff,
+                bR, bG, bB, 0, bOff,
+                0,  0,  0,  1, 0
+            ];
+
+            // Update UI
+            const sliderEls = document.querySelectorAll('.matrix-slider');
+            for (let i = 0; i < 20; i++) {
+                let val = parseFloat(newMatrix[i]).toFixed(2);
+                inputs[i].value = val;
+                sliderEls[i].value = val;
+            }
+            updateApp();
+            alert("LUT Extracted! Note: This is a linear approximation of your 3D LUT.");
+        }
+        // --------------------------------------------------------
+
         function parsePastedData() {
             const text = document.getElementById('pasteArea').value;
             const matches = text.match(/-?\d+\.?\d*/g);
@@ -176,7 +277,7 @@
                 const sliderEls = document.querySelectorAll('.matrix-slider');
                 for (let i = 0; i < 20; i++) {
                     inputs[i].value = parseFloat(matches[i]);
-                    sliderEls[i].value = parseFloat(matches[i]); // Sync slider position
+                    sliderEls[i].value = parseFloat(matches[i]); 
                 }
                 updateApp();
             } else {
@@ -185,17 +286,11 @@
         }
 
         function updateApp() {
-            applyMatrix();
+            const values = inputs.map(input => input.value || 0).join(' ');
+            matrixElement.setAttribute('values', values);
             generateName();
         }
 
-        function applyMatrix() {
-            const values = inputs.map(input => input.value || 0).join(' ');
-            matrixElement.setAttribute('values', values);
-            previewImage.style.filter = 'url(#custom-matrix-filter)';
-        }
-
-        // Logic to determine color tint and suggest names
         function generateName() {
             const redR = parseFloat(inputs[0].value) || 0;
             const redOff = parseFloat(inputs[4].value) || 0;
@@ -206,15 +301,13 @@
             const redBias = redR + redOff;
             const blueBias = blueB + blueOff;
             
-            let en = "Classic";
-            let kn = "ಕ್ಲಾಸಿಕ್ (Classic)";
-
+            let en = "Classic"; let kn = "ಕ್ಲಾಸಿಕ್ (Classic)";
             if (redR < 0.6 && greenG < 0.6 && blueB < 0.6) {
                 en = "Vintage Fade"; kn = "ಮರೆಯಾದ ನೆನಪು (Faded Memory)";
             } else if (redBias > blueBias + 0.3 && redBias > greenG) {
-                en = "Warm Sunlit / Golden"; kn = "ಸೂರ್ಯನ ಮಂಜು (Sunlit Haze)";
+                en = "Warm Sunlit"; kn = "ಸೂರ್ಯನ ಮಂಜು (Sunlit Haze)";
             } else if (blueBias > redBias + 0.3 && blueBias > greenG) {
-                en = "Cinematic Teal / Cool"; kn = "ತಂಪು ನೀಲಿ (Cool Blue)";
+                en = "Cinematic Teal"; kn = "ತಂಪು ನೀಲಿ (Cool Blue)";
             } else if (greenG > redBias && greenG > blueBias) {
                 en = "Earthy / Nature"; kn = "ಹಸಿರು ವನ (Green Forest)";
             } else if (redR > 1.2 || greenG > 1.2 || blueB > 1.2) {
@@ -228,23 +321,23 @@
         }
 
         function copyEditedMatrix() {
-            let output = '[\n  ';
+            let grainVal = parseFloat(grainSlider.value).toFixed(2);
+            let output = '{\n  "grainStrength": ' + grainVal + ',\n  "matrix": [\n    ';
             for (let i = 0; i < 20; i++) {
                 let val = parseFloat(inputs[i].value || 0).toFixed(2);
                 output += val;
                 if (i < 19) output += ', ';
-                if ((i + 1) % 5 === 0 && i !== 19) output += '\n  ';
+                if ((i + 1) % 5 === 0 && i !== 19) output += '\n    ';
             }
-            output += '\n]';
+            output += '\n  ]\n}';
 
             navigator.clipboard.writeText(output).then(() => {
                 const btn = document.getElementById('copyBtn');
                 btn.innerText = 'Copied! ✓';
-                setTimeout(() => btn.innerText = 'Copy Final Matrix', 2000);
+                setTimeout(() => btn.innerText = 'Copy Final Matrix JSON', 2000);
             });
         }
 
-        // Apply on first load
         updateApp();
     </script>
 </body>
